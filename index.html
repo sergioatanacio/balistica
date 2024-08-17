@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Juego de Balística Avanzado</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-4">
+    <div class="max-w-2xl mx-auto">
+        <div class="bg-white p-4 rounded shadow mb-4">
+            <div class="mb-4">
+                <label for="angleRange" class="block text-sm font-medium text-gray-700">Ángulo: <span id="angleValue">45</span>°</label>
+                <input type="range" id="angleRange" min="0" max="90" value="45" class="w-full">
+            </div>
+            <div class="mb-4">
+                <label for="powerRange" class="block text-sm font-medium text-gray-700">Potencia: <span id="powerValue">50</span></label>
+                <input type="range" id="powerRange" min="0" max="100" value="50" class="w-full">
+            </div>
+            <button id="shootBtn" class="w-full bg-red-500 text-white p-2 rounded">Disparar</button>
+        </div>
+        <div class="mb-4 text-center">
+            <span class="font-bold">Nivel: <span id="levelDisplay">1</span></span>
+        </div>
+        <canvas id="gameCanvas" width="600" height="300" class="border-2 border-black"></canvas>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const angleRange = document.getElementById('angleRange');
+        const powerRange = document.getElementById('powerRange');
+        const shootBtn = document.getElementById('shootBtn');
+        const angleValue = document.getElementById('angleValue');
+        const powerValue = document.getElementById('powerValue');
+        const levelDisplay = document.getElementById('levelDisplay');
+
+        let angle = 45;
+        let power = 50;
+        let projectileX = 20;
+        let projectileY = 280;
+        let vx = 0;
+        let vy = 0;
+        let isFlying = false;
+        let level = 1;
+
+        let targets = [];
+        let obstacles = [];
+        let trees = [];
+
+        function initLevel() {
+            targets = [
+                { x: 300, y: 270, width: 20, height: 30, hit: false },
+                { x: 400, y: 270, width: 20, height: 30, hit: false },
+                { x: 500, y: 270, width: 20, height: 30, hit: false }
+            ];
+
+            obstacles = [
+                { x: 200, y: 200, width: 20, height: 100, speed: level },
+                { x: 350, y: 220, width: 20, height: 80, speed: -level }
+            ];
+
+            trees = [
+                { x: 150, y: 230, size: 40, hit: false },
+                { x: 450, y: 230, size: 50, hit: false }
+            ];
+
+            levelDisplay.textContent = level;
+        }
+
+        function drawCannon() {
+            ctx.fillStyle = 'gray';
+            ctx.beginPath();
+            ctx.arc(20, 280, 20, Math.PI, 2 * Math.PI);
+            ctx.fill();
+
+            ctx.save();
+            ctx.translate(20, 280);
+            ctx.rotate(-angle * Math.PI / 180);
+            ctx.fillRect(0, -5, 40, 10);
+            ctx.restore();
+        }
+
+        function drawProjectile() {
+            ctx.fillStyle = 'red';
+            ctx.beginPath();
+            ctx.arc(projectileX, projectileY, 5, 0, 2 * Math.PI);
+            ctx.fill();
+        }
+
+        function drawTargets() {
+            targets.forEach(target => {
+                if (!target.hit) {
+                    ctx.fillStyle = 'red';
+                    ctx.fillRect(target.x, target.y, target.width, target.height);
+                }
+            });
+        }
+
+        function drawObstacles() {
+            ctx.fillStyle = 'darkgray';
+            obstacles.forEach(obstacle => {
+                ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+            });
+        }
+
+        function drawTrees() {
+            trees.forEach(tree => {
+                if (!tree.hit) {
+                    ctx.fillStyle = 'green';
+                    ctx.beginPath();
+                    ctx.moveTo(tree.x, tree.y);
+                    ctx.lineTo(tree.x - tree.size / 2, tree.y + tree.size);
+                    ctx.lineTo(tree.x + tree.size / 2, tree.y + tree.size);
+                    ctx.closePath();
+                    ctx.fill();
+
+                    ctx.fillStyle = 'brown';
+                    ctx.fillRect(tree.x - 5, tree.y + tree.size, 10, 20);
+                }
+            });
+        }
+
+        function drawScene() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw sky
+            ctx.fillStyle = 'lightblue';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw ground
+            ctx.fillStyle = 'green';
+            ctx.fillRect(0, 285, canvas.width, 15);
+
+            drawCannon();
+            drawTargets();
+            drawObstacles();
+            drawTrees();
+            drawProjectile();
+        }
+
+        function updateProjectile() {
+            if (!isFlying) return;
+
+            projectileX += vx;
+            projectileY += vy;
+            vy += 0.2; // Gravity
+
+            // Check collisions
+            targets.forEach(target => {
+                if (!target.hit && projectileX > target.x && projectileX < target.x + target.width &&
+                    projectileY > target.y && projectileY < target.y + target.height) {
+                    target.hit = true;
+                }
+            });
+
+            obstacles.forEach(obstacle => {
+                if (projectileX > obstacle.x && projectileX < obstacle.x + obstacle.width &&
+                    projectileY > obstacle.y && projectileY < obstacle.y + obstacle.height) {
+                    isFlying = false;
+                }
+            });
+
+            trees.forEach(tree => {
+                if (!tree.hit && Math.abs(projectileX - tree.x) < tree.size / 2 && 
+                    projectileY > tree.y && projectileY < tree.y + tree.size + 20) {
+                    tree.hit = true;
+                }
+            });
+
+            // Stop if out of bounds
+            if (projectileX > canvas.width || projectileY > canvas.height) {
+                isFlying = false;
+            }
+
+            drawScene();
+            if (isFlying) {
+                requestAnimationFrame(updateProjectile);
+            } else {
+                checkLevelComplete();
+            }
+        }
+
+        function updateObstacles() {
+            obstacles.forEach(obstacle => {
+                obstacle.y += obstacle.speed;
+                if (obstacle.y <= 0 || obstacle.y + obstacle.height >= canvas.height) {
+                    obstacle.speed *= -1;
+                }
+            });
+        }
+
+        function shoot() {
+            if (isFlying) return;
+
+            projectileX = 20;
+            projectileY = 280;
+            vx = Math.cos(angle * Math.PI / 180) * power / 10;
+            vy = -Math.sin(angle * Math.PI / 180) * power / 10;
+            isFlying = true;
+
+            updateProjectile();
+        }
+
+        function checkLevelComplete() {
+            if (targets.every(target => target.hit)) {
+                level++;
+                initLevel();
+                alert(`¡Nivel ${level-1} completado! Pasando al nivel ${level}.`);
+            }
+        }
+
+        function gameLoop() {
+            updateObstacles();
+            drawScene();
+            requestAnimationFrame(gameLoop);
+        }
+
+        angleRange.addEventListener('input', (e) => {
+            angle = parseInt(e.target.value);
+            angleValue.textContent = angle;
+        });
+
+        powerRange.addEventListener('input', (e) => {
+            power = parseInt(e.target.value);
+            powerValue.textContent = power;
+        });
+
+        shootBtn.addEventListener('click', shoot);
+
+        initLevel();
+        gameLoop();
+    </script>
+</body>
+</html>
